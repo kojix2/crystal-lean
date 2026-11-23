@@ -1,0 +1,21 @@
+name: crystal-lean
+version: 0.0.0
+description: Translate a restricted Crystal subset to Lean for verification.
+
+crystal: "= 1.22.3"
+
+targets:
+  crystal-lean:
+    main: src/crystal-lean.cr
+
+# Source dependencies of Crystal's embedded compiler.
+dependencies:
+  markd:
+    github: icyleaf/markd
+    commit: 6bb4c6107349a9d050dbffbd0a92e0a581c693f0
+  reply:
+    github: I3oris/reply
+    commit: f314535853df876af35ec1986ecf85fdff38e809
+  sanitize:
+    github: straight-shoota/sanitize
+    commit: c17d933fed22c6d3d615cca91a895166414389af

@@ -1,0 +1,17 @@
+# Crystal build output and installed shards
+/bin/
+/lib/
+/.crystal/
+*.dwarf
+
+# Lean compiler output
+*.ilean
+*.olean
+*.olean.private
+*.olean.server
+
+# Python bytecode
+__pycache__/
+
+# Local environment
+.DS_Store

@@ -1,0 +1,72 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      LLVM_CONFIG: llvm-config
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential libffi-dev libgc-dev libgmp-dev libpcre2-dev \
+            libssl-dev libxml2-dev libyaml-dev llvm-dev pkg-config zlib1g-dev zstd
+
+      - name: Read required Crystal version
+        id: crystal
+        run: |
+          version=$(sed -nE 's/^crystal: "= ([0-9]+\.[0-9]+\.[0-9]+)"$/\1/p' shard.yml)
+          if [[ -z "$version" ]]; then
+            echo 'Expected an exact Crystal version in shard.yml' >&2
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - uses: crystal-lang/install-crystal@v1
+        with:
+          crystal: ${{ steps.crystal.outputs.version }}
+
+      - name: Install latest stable Lean
+        working-directory: ${{ runner.temp }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          release=$(gh api repos/leanprover/lean4/releases/latest)
+          tag=$(jq -er '.tag_name' <<< "$release")
+          lean_dist="lean-${tag#v}-linux"
+          asset=$(jq -e --arg name "$lean_dist.tar.zst" '.assets[] | select(.name == $name)' <<< "$release")
+          url=$(jq -er '.browser_download_url' <<< "$asset")
+          digest=$(jq -er '.digest | select(test("^sha256:[0-9a-f]{64}$")) | ltrimstr("sha256:")' <<< "$asset")
+          curl -fsSL --retry 3 -o lean.tar.zst "$url"
+          printf '%s  lean.tar.zst\n' "$digest" | sha256sum --check
+          tar -xf lean.tar.zst
+          # Keep Lean's bundled linker out of PATH during Crystal builds.
+          echo "LEAN=$RUNNER_TEMP/$lean_dist/bin/lean" >> "$GITHUB_ENV"
+
+      - name: Check formatting and run tests
+        run: |
+          crystal --version
+          "$LLVM_CONFIG" --version
+          "$LEAN" --version
+          crystal tool format --check src spec examples
+          shards install --frozen
+          ./tests/run

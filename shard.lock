@@ -1,0 +1,14 @@
+version: 2.0
+shards:
+  markd:
+    git: https://github.com/icyleaf/markd.git
+    version: 0.6.0+git.commit.6bb4c6107349a9d050dbffbd0a92e0a581c693f0
+
+  reply:
+    git: https://github.com/i3oris/reply.git
+    version: 0.4.0+git.commit.f314535853df876af35ec1986ecf85fdff38e809
+
+  sanitize:
+    git: https://github.com/straight-shoota/sanitize.git
+    version: 0.1.0+git.commit.c17d933fed22c6d3d615cca91a895166414389af
+

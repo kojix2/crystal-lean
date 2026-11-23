@@ -1,0 +1,62 @@
+# crystal-lean
+
+Translate a single typed Crystal method into an executable Lean 4 model and check proofs about it. The frontend lowers Crystal's typed AST to a small imperative IR. The generated Lean file contains both the resulting program and its interpreter.
+
+## Build
+
+Install Crystal **1.22.3** with Shards and the Crystal compiler sources, matching LLVM development libraries, libxml2, libffi, and a C/C++ toolchain. The build embeds Crystal compiler code and can use several GB of memory. `verify` requires Lean 4 and has been tested with Lean 4.36.0.
+
+```sh
+shards install --frozen
+shards build --frozen
+bin/crystal-lean --help
+```
+
+Add `bin` to `PATH` to run `crystal lean` as an alias for `crystal-lean`. Use `--lean /path/to/lean` or set `LEAN` to select the Lean executable. If Lean bundles a linker that conflicts with Crystal's LLVM, keep that linker out of `PATH` and pass Lean by absolute path.
+
+## Use
+
+```sh
+# Inspect the typed AST and intermediate representation.
+bin/crystal-lean inspect examples/clamp.cr
+
+# Generate a Lean file and check that it is up to date.
+bin/crystal-lean translate examples/clamp.cr -o Clamp.lean
+bin/crystal-lean translate examples/clamp.cr -o Clamp.lean --check
+
+# Check a declaration about the generated model.
+bin/crystal-lean verify examples/clamp.cr \
+  --proof proofs/clamp_correct.lean --theorem clamp_correct
+
+# Check a theorem against an independent specification.
+bin/crystal-lean verify examples/bubble_sort.cr \
+  --contract proofs/bubble_sort_contract.lean --statement BubbleSortContract.correct \
+  --proof proofs/bubble_sort_correct.lean --theorem bubble_sort_correct
+```
+
+`translate` writes to stdout by default. `--check` requires `-o` and compares without writing. The CLI discovers the standard library with `crystal env CRYSTAL_PATH`, ignoring relative entries. Set `CRYSTAL` to select that Crystal executable or `CRYSTAL_PATH` to supply a trusted standard library explicitly.
+
+`verify` compiles the generated `CrystalLeanModel` and the supplied proof in a temporary directory. With `--contract`, define a `Prop` that directly references `crystalProgram`. The proof can use that proposition from `CrystalLeanContract`. Lean checks that the named theorem has a definitionally equal type and that both declarations depend only on `propext`, `Classical.choice`, or `Quot.sound`. Without a contract, `verify` reports the selected proposition and its dependencies, rejects `sorryAx`, and leaves it to you to check that the proposition is about the generated program. Run verification with trusted Lean files.
+
+## Supported Crystal
+
+- One top-level method with explicit parameter and return types. Parameters can be `Int32`, `Bool`, or `Array(Int32)`. The method can return either scalar type or an array parameter.
+- Local assignments, `if` and `while` with `Bool` conditions, early `return`, and implicit returns from final expressions or branches. An assignment cannot supply the final value.
+- `Int32` arithmetic (`+`, `-`, `*`, `//`, `%`), comparisons and unary minus, plus `Bool` negation and equality.
+- Array indexing and `size`. A method that writes elements must take exactly one array parameter and return it. Array aliases and reassignment are outside the subset.
+
+Calls to other methods, recursion, macros, blocks, unions, and loop exits such as `break` and `next` are outside the subset. The model observes returned values and modeled errors. For arrays it observes elements, with object identity and mutations before an exception outside its scope.
+
+## Execution model
+
+`crystalProgram` takes `fuel : Nat` before the method arguments. Fuel bounds interpreter recursion. `.error .outOfFuel` means the result is inconclusive. The model includes checked `Int32` arithmetic, floor division and modulo, and negative array indices. `while_invariant` and `while_total` help prove loop invariants and termination.
+
+Lean checks properties of the generated model. Crystal-to-Lean correspondence remains unproved. See [`examples/`](examples/) for Crystal inputs and [`proofs/`](proofs/) for Lean specifications and proofs.
+
+## Develop
+
+Run `./tests/run` after installing the shards. It rebuilds the CLI, runs the Crystal specs, and checks the Lean runtime, translations, and proofs. Set `LEAN` to test with a specific Lean executable. Python 3 is required for the integration tests.
+
+[CI](.github/workflows/ci.yml) runs the same suite and checks Crystal formatting on `ubuntu-latest`, using the runner's LLVM packages and the latest stable Lean release. CI reads the required Crystal version from `shard.yml` because the frontend embeds Crystal's compiler internals. [Dependabot](.github/dependabot.yml) checks GitHub Actions for updates weekly.
+
+In [`src/crystal_lean/`](src/crystal_lean/), `compiler.cr` wraps Crystal's internal APIs. `frontend.cr` validates and lowers the typed AST into `ir.cr`. `lean_backend.cr` emits that IR with its Lean interpreter. `verifier.cr` runs Lean and `proof_gate.lean` checks the selected declaration.

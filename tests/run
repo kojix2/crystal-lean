@@ -1,0 +1,13 @@
+#!/bin/sh
+set -eu
+
+cd "$(dirname "$0")/.."
+crystal=$(command -v crystal)
+lean=$(command -v "${LEAN:-lean}")
+
+shards build --frozen
+CRYSTAL_PATH="$("$crystal" env CRYSTAL_PATH)" "$crystal" spec
+
+for suite in runtime cli arrays search proofs; do
+  python3 -u "tests/$suite.py" "$PWD/bin/crystal-lean" "$lean" "$crystal"
+done

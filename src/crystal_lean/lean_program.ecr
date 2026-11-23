@@ -1,0 +1,10 @@
+<%= RUNTIME %>
+
+open CrystalLeanIR
+
+-- Generated from Crystal method <%= function.name %>
+def program : CrystalLeanIR.Stmt :=
+  <%= statements(function.body) %>
+
+def crystalProgram (fuel : Nat)<%= params %> : Except CrystalLeanIR.Error CrystalLeanIR.Value :=
+  CrystalLeanIR.run fuel program [<%= bindings %>]
